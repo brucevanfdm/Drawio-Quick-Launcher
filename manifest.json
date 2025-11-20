@@ -8,5 +8,17 @@
     ],
     "background": {
         "service_worker": "background.js"
-    }
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*.google.com/*",
+                "*://*.chatgpt.com/*",
+                "*://claude.ai/*"
+            ],
+            "js": [
+                "content.js"
+            ]
+        }
+    ]
 }

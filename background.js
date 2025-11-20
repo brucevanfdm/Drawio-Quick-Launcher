@@ -10,34 +10,50 @@ chrome.runtime.onInstalled.addListener(() => {
             "*://*.google.com/*",
             "*://*.chatgpt.com/*",
             "*://claude.ai/*",
-            "<all_urls>" // Added for testing flexibility, can be restricted later
+            "<all_urls>"
         ]
     });
 });
 
-// Handle the context menu click
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-    if (info.menuItemId === "open-in-drawio" && info.selectionText) {
-        try {
-            const xml = info.selectionText.trim();
-            if (!xml) return;
-            // 1. Compress the XML using deflate-raw
-            const compressed = await compressData(xml);
-
-            // 2. Convert to Base64
-            const base64 = arrayBufferToBase64(compressed);
-
-            // 3. URL Encode
-            // Draw.io #R format expects standard Base64 (deflate-raw).
-            const url = `https://app.diagrams.net/#R${base64}`;
-
-            chrome.tabs.create({ url: url });
-
-        } catch (error) {
-            console.error("Error processing Draw.io XML:", error);
-        }
+// Handle messages from content script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "open_drawio" && request.xml) {
+        processXml(request.xml);
     }
 });
+
+// Handle the context menu click
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === "open-in-drawio" && info.selectionText) {
+        processXml(info.selectionText);
+    }
+});
+
+/**
+ * Processes the XML string: compresses it and opens Draw.io
+ * @param {string} xmlText 
+ */
+async function processXml(xmlText) {
+    try {
+        const xml = xmlText.trim();
+        if (!xml) return;
+
+        // 1. Compress the XML using deflate-raw
+        const compressed = await compressData(xml);
+
+        // 2. Convert to Base64
+        const base64 = arrayBufferToBase64(compressed);
+
+        // 3. URL Encode
+        // Draw.io #R format expects standard Base64 (deflate-raw).
+        const url = `https://app.diagrams.net/#R${base64}`;
+
+        chrome.tabs.create({ url: url });
+
+    } catch (error) {
+        console.error("Error processing Draw.io XML:", error);
+    }
+}
 
 /**
  * Compresses a string using Deflate (Raw) format.
