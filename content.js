@@ -4,8 +4,8 @@ const BUTTON_ID_PREFIX = 'drawio-launcher-btn-';
 
 function isDrawioXml(text) {
     if (!text || text.length < 50) return false;
-    return text.includes('<mxfile host="app.diagrams.net"') ||
-        (text.includes('<mxGraphModel>') && text.includes('<root>'));
+    return text.includes('</mxfile>"') ||
+        (text.includes('</mxGraphModel>'));
 }
 
 function createButton(xml) {
