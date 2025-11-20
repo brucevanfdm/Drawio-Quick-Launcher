@@ -1,0 +1,12 @@
+{
+    "manifest_version": 3,
+    "name": "Draw.io Quick Launcher",
+    "version": "1.0",
+    "description": "Open selected Draw.io XML in diagrams.net",
+    "permissions": [
+        "contextMenus"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    }
+}

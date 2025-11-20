@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Compression Test</title>
+</head>
+
+<body>
+    <h1>Compression Test</h1>
+    <textarea id="input" rows="10"
+        cols="80"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></textarea>
+    <br>
+    <button onclick="generateUrl()">Generate URL</button>
+    <br>
+    <a id="result" href="#" target="_blank">Result Link</a>
+    <p id="debug"></p>
+
+    <script>
+        async function compressData(str) {
+            const stream = new Blob([str]).stream();
+            const compressedStream = stream.pipeThrough(new CompressionStream("deflate-raw"));
+            return await new Response(compressedStream).arrayBuffer();
+        }
+
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+
+        async function generateUrl() {
+            const xml = document.getElementById('input').value;
+            try {
+                const compressed = await compressData(xml);
+                const base64 = arrayBufferToBase64(compressed);
+                // Draw.io uses standard base64 in the hash. 
+                // We usually don't need to encodeURIComponent the base64 for the hash 
+                // UNLESS it contains characters that might be ambiguous. 
+                // But standard base64 uses +, /, =. 
+                // Let's try standard base64 first.
+                const url = `https://app.diagrams.net/#R${base64}`;
+
+                const link = document.getElementById('result');
+                link.href = url;
+                link.innerText = url;
+
+                document.getElementById('debug').innerText = "Base64: " + base64;
+            } catch (e) {
+                console.error(e);
+                document.getElementById('debug').innerText = "Error: " + e.message;
+            }
+        }
+    </script>
+</body>
+
+</html>
