@@ -1,94 +1,4 @@
-// background.js
 
-// Create the context menu item when the extension is installed
-chrome.runtime.onInstalled.addListener(() => {
-    chrome.contextMenus.create({
-        id: "open-in-drawio",
-        title: "Open in Draw.io",
-        contexts: ["selection"],
-        documentUrlPatterns: [
-            "*://*.google.com/*",
-            "*://*.chatgpt.com/*",
-            "*://claude.ai/*",
-            "<all_urls>"
-        ]
-    });
-});
-
-// Handle messages from content script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "open_drawio" && request.xml) {
-        processXml(request.xml);
-    }
-});
-
-// Handle the context menu click
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === "open-in-drawio" && info.selectionText) {
-        processXml(info.selectionText);
-    }
-});
-
-/**
- * Processes the XML string: compresses it and opens Draw.io
- * @param {string} xmlText 
- */
-async function processXml(xmlText) {
-    try {
-        const xml = xmlText.trim();
-        if (!xml) return;
-
-        // 0. Sanitize XML
-        const sanitizedXml = sanitizeXml(xml);
-
-        // 1. Compress the XML using deflate-raw
-        const compressed = await compressData(sanitizedXml);
-
-        // 2. Convert to Base64
-        const base64 = arrayBufferToBase64(compressed);
-
-        // 3. URL Encode
-        // Draw.io #R format expects standard Base64 (deflate-raw).
-        const url = `https://app.diagrams.net/#R${base64}`;
-
-        chrome.tabs.create({ url: url });
-
-    } catch (error) {
-        console.error("Error processing Draw.io XML:", error);
-    }
-}
-
-/**
- * Compresses a string using Deflate (Raw) format.
- * @param {string} str 
- * @returns {Promise<ArrayBuffer>}
- */
-async function compressData(str) {
-    const stream = new Blob([str]).stream();
-    const compressedStream = stream.pipeThrough(new CompressionStream("deflate-raw"));
-    return await new Response(compressedStream).arrayBuffer();
-}
-
-/**
- * Converts an ArrayBuffer to a Base64 string.
- * @param {ArrayBuffer} buffer 
- * @returns {string}
- */
-function arrayBufferToBase64(buffer) {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
-}
-
-/**
- * Sanitizes the XML string by escaping special characters in attributes and text content.
- * @param {string} xml 
- * @returns {string}
- */
 function sanitizeXml(xml) {
     let result = '';
     let i = 0;
@@ -143,8 +53,12 @@ function sanitizeXml(xml) {
             }
         }
         else if (state === STATE_TAG_OPEN) {
+            // We just saw <. We expect a tag name.
+            // Actually we can merge TAG_OPEN and TAG_NAME for simplicity in this loose parser
+            // But let's keep it.
             result += char;
             if (/\s/.test(char)) {
+                // < foo ... ? weird but ok
                 state = STATE_TAG_NAME;
             } else if (char === '>') {
                 state = STATE_TEXT;
@@ -196,8 +110,12 @@ function sanitizeXml(xml) {
         }
         else if (state === STATE_COMMENT) {
             result += char;
-            if (char === '>' && result.endsWith('-->')) {
-                state = STATE_TEXT;
+            if (xml.startsWith('-->', i - 2)) { // i is currently at >, i-1 is -, i-2 is -
+                // Wait, we are processing char by char.
+                // If we are at >, check if prev two were --
+                if (char === '>' && result.endsWith('-->')) {
+                    state = STATE_TEXT;
+                }
             }
         }
         else if (state === STATE_CDATA) {
@@ -210,4 +128,65 @@ function sanitizeXml(xml) {
         i++;
     }
     return result;
+}
+
+
+// Tests
+const tests = [
+    {
+        name: "Basic XML",
+        input: '<root><child id="1">Hello</child></root>',
+        expected: '<root><child id="1">Hello</child></root>'
+    },
+    {
+        name: "Unescaped < in attribute",
+        input: '<mxGraphModel><root><mxCell value="x < y" /></root></mxGraphModel>',
+        expected: '<mxGraphModel><root><mxCell value="x &lt; y" /></root></mxGraphModel>'
+    },
+    {
+        name: "Unescaped > in attribute",
+        input: '<mxCell value="x > y" />',
+        expected: '<mxCell value="x &gt; y" />'
+    },
+    {
+        name: "Unescaped < in text",
+        input: '<text>x < y</text>',
+        expected: '<text>x &lt; y</text>'
+    },
+    {
+        name: "Unescaped > in text",
+        input: '<text>x > y</text>',
+        expected: '<text>x &gt; y</text>'
+    },
+    {
+        name: "Mixed valid tags and math",
+        input: '<div style="font-size:12px">if x < 10 then y > 20</div>',
+        expected: '<div style="font-size:12px">if x &lt; 10 then y &gt; 20</div>'
+    },
+    {
+        name: "Complex Draw.io example",
+        input: '<mxCell value="Math: 0 < x < 10" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">',
+        expected: '<mxCell value="Math: 0 &lt; x &lt; 10" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">'
+    }
+];
+
+let passed = 0;
+tests.forEach(t => {
+    const output = sanitizeXml(t.input);
+    if (output === t.expected) {
+        console.log(`PASS: ${t.name}`);
+        passed++;
+    } else {
+        console.error(`FAIL: ${t.name}`);
+        console.error(`  Input:    ${t.input}`);
+        console.error(`  Expected: ${t.expected}`);
+        console.error(`  Actual:   ${output}`);
+    }
+});
+
+if (passed === tests.length) {
+    console.log(`\nAll ${passed} tests passed!`);
+} else {
+    console.log(`\n${passed}/${tests.length} tests passed.`);
+    process.exit(1);
 }
