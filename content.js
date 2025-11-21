@@ -53,7 +53,8 @@ const processPendingBlocks = debounce(() => {
         // If already processed successfully, skip (unless we want to support updates, but usually once is enough)
         if (block.dataset.drawioProcessed === 'true') return;
 
-        const text = block.textContent;
+        const codeElement = block.querySelector('code');
+        const text = codeElement ? codeElement.textContent : block.textContent;
         if (isDrawioXml(text)) {
             block.dataset.drawioProcessed = 'true';
 
@@ -107,23 +108,25 @@ const observer = new MutationObserver((mutations) => {
                 if (node.tagName === 'PRE') {
                     pendingBlocks.add(node);
                     shouldProcess = true;
-                } else if (node.querySelectorAll) {
-                    const pres = node.querySelectorAll('pre');
-                    pres.forEach(p => pendingBlocks.add(p));
-                    if (pres.length > 0) shouldProcess = true;
+                } else {
+                    // Check if the added node is inside a PRE
+                    const parentPre = node.closest('pre');
+                    if (parentPre) {
+                        pendingBlocks.add(parentPre);
+                        shouldProcess = true;
+                    } else if (node.querySelectorAll) {
+                        const pres = node.querySelectorAll('pre');
+                        pres.forEach(p => pendingBlocks.add(p));
+                        if (pres.length > 0) shouldProcess = true;
+                    }
                 }
             } else if (node.nodeType === 3) { // Text node
-                // If text added, check if parent is PRE
+                // If text added, check if parent is inside PRE
                 const parent = node.parentElement;
-                if (parent && parent.tagName === 'PRE') {
-                    pendingBlocks.add(parent);
-                    shouldProcess = true;
-                }
-                // Also check if parent is CODE inside PRE
-                if (parent && parent.tagName === 'CODE') {
-                    const grandParent = parent.parentElement;
-                    if (grandParent && grandParent.tagName === 'PRE') {
-                        pendingBlocks.add(grandParent);
+                if (parent) {
+                    const parentPre = parent.closest('pre');
+                    if (parentPre) {
+                        pendingBlocks.add(parentPre);
                         shouldProcess = true;
                     }
                 }
@@ -134,14 +137,10 @@ const observer = new MutationObserver((mutations) => {
         if (mutation.type === 'characterData') {
             const node = mutation.target;
             const parent = node.parentElement;
-            if (parent && parent.tagName === 'PRE') {
-                pendingBlocks.add(parent);
-                shouldProcess = true;
-            }
-            if (parent && parent.tagName === 'CODE') {
-                const grandParent = parent.parentElement;
-                if (grandParent && grandParent.tagName === 'PRE') {
-                    pendingBlocks.add(grandParent);
+            if (parent) {
+                const parentPre = parent.closest('pre');
+                if (parentPre) {
+                    pendingBlocks.add(parentPre);
                     shouldProcess = true;
                 }
             }
