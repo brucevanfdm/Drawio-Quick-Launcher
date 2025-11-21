@@ -93,7 +93,12 @@ const processedBlocks = new WeakSet();
 
 // Helper function to check if a CODE element is relevant for our extension
 function isRelevantCodeBlock(codeElement) {
-    if (!codeElement || codeElement.tagName !== 'CODE') return false;
+    if (!codeElement) return false;
+
+    // Always consider code-block elements as relevant for checking
+    if (codeElement.tagName === 'CODE-BLOCK') return true;
+
+    if (codeElement.tagName !== 'CODE') return false;
 
     const classes = codeElement.className || '';
     // Check for language classes that indicate XML or Mermaid
@@ -111,7 +116,18 @@ const processPendingBlocks = debounce(() => {
         // Extract text and detect type
         let text, codeElement;
 
-        if (block.tagName === 'CODE') {
+        if (block.tagName === 'CODE-BLOCK') {
+            // Gemini: The text content of CODE-BLOCK includes headers like "Code snippet",
+            // so we must extract text from the inner CODE element for accurate detection (especially for Mermaid regex which uses ^)
+            const innerCode = block.querySelector('code');
+            if (innerCode) {
+                text = innerCode.textContent;
+                codeElement = innerCode;
+            } else {
+                text = block.textContent;
+                codeElement = block;
+            }
+        } else if (block.tagName === 'CODE') {
             // Standalone CODE element (e.g., Claude.ai)
             text = block.textContent;
             codeElement = block;
@@ -226,6 +242,12 @@ const observer = new MutationObserver((mutations) => {
                             pendingBlocks.add(node);
                             shouldProcess = true;
                         }
+                    } else if (tagName === 'CODE-BLOCK') {
+                        // Support for Gemini's code-block tag
+                        if (!processedBlocks.has(node)) {
+                            pendingBlocks.add(node);
+                            shouldProcess = true;
+                        }
                     } else if (tagName === 'CODE') {
                         // Early exit if already processed
                         if (processedBlocks.has(node)) continue;
@@ -332,6 +354,11 @@ const observer = new MutationObserver((mutations) => {
                         pendingBlocks.add(parent);
                         shouldProcess = true;
                     }
+                } else if (parentTagName === 'CODE-BLOCK') {
+                    if (!processedBlocks.has(parent)) {
+                        pendingBlocks.add(parent);
+                        shouldProcess = true;
+                    }
                 } else if (parentTagName === 'CODE') {
                     if (!processedBlocks.has(parent) && isRelevantCodeBlock(parent)) {
                         pendingBlocks.add(parent);
@@ -357,10 +384,10 @@ observer.observe(document.body, {
 });
 
 // Initial pass
-// Prioritize CODE elements
-document.querySelectorAll('code').forEach(code => {
-    if (isRelevantCodeBlock(code)) {
-        pendingBlocks.add(code);
+// Prioritize CODE and CODE-BLOCK elements
+document.querySelectorAll('code, code-block').forEach(el => {
+    if (isRelevantCodeBlock(el)) {
+        pendingBlocks.add(el);
     }
 });
 
