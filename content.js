@@ -56,18 +56,29 @@ const processPendingBlocks = debounce(() => {
         const text = block.textContent;
         if (isDrawioXml(text)) {
             block.dataset.drawioProcessed = 'true';
-            const btn = createButton(text);
 
-            // Insert button
-            btn.style.float = 'right';
-            btn.style.marginRight = '8px';
-            btn.style.marginTop = '8px';
+            // Create Top Button
+            const btnTop = createButton(text);
+            btnTop.style.float = 'right';
+            btnTop.style.marginRight = '8px';
+            btnTop.style.marginTop = '8px';
 
+            // Create Bottom Button
+            const btnBottom = createButton(text);
+            btnBottom.style.float = 'right';
+            btnBottom.style.marginRight = '8px';
+            btnBottom.style.marginBottom = '8px';
+            btnBottom.style.marginTop = '8px'; // Add some space from text
+
+            // Insert Top Button
             if (block.firstChild) {
-                block.insertBefore(btn, block.firstChild);
+                block.insertBefore(btnTop, block.firstChild);
             } else {
-                block.appendChild(btn);
+                block.appendChild(btnTop);
             }
+
+            // Insert Bottom Button
+            block.appendChild(btnBottom);
 
             // Remove from pending once processed
             pendingBlocks.delete(block);
