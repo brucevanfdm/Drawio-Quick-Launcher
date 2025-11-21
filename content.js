@@ -142,12 +142,13 @@ const processPendingBlocks = debounce(() => {
         if (type) {
             processedBlocks.add(block);
 
-            // Check if we're on Claude.ai for button positioning
+            // Check if we're on Claude.ai or Gemini for button positioning
             const isClaudeAi = window.location.hostname.includes('claude.ai');
+            const isGemini = block.tagName === 'CODE-BLOCK';
 
             if (isClaudeAi) {
                 // Claude specific layout: Block layout (own line) using SPAN (phrasing content) to be valid inside CODE
-
+                // ... (existing Claude logic) ...
                 // Top Button Container
                 const topContainer = document.createElement('span');
                 topContainer.style.cssText = 'display: flex; justify-content: flex-start; margin-bottom: 8px; width: 100%;';
@@ -179,6 +180,54 @@ const processPendingBlocks = debounce(() => {
                 // Insert Bottom Container
                 block.appendChild(bottomContainer);
 
+            } else if (isGemini) {
+                // Gemini specific layout: Insert into the header toolbar if possible
+                const headerButtons = block.querySelector('.code-block-decoration .buttons');
+
+                if (headerButtons) {
+                    const btn = createButton(text, type);
+                    // Override styles for Gemini header
+                    btn.style.float = 'none';
+                    btn.style.margin = '0 8px 0 0'; // Right margin to separate from copy button
+                    btn.style.height = '24px'; // Slightly smaller to fit header
+                    btn.style.lineHeight = '24px';
+                    btn.style.fontSize = '11px';
+                    btn.style.top = '-6px'
+
+                    // Insert as first child of buttons container
+                    if (headerButtons.firstChild) {
+                        headerButtons.insertBefore(btn, headerButtons.firstChild);
+                    } else {
+                        headerButtons.appendChild(btn);
+                    }
+                } else {
+                    // Fallback if no header found (e.g. unexpected structure)
+                    // Try to insert inside the internal container to be "inside" the box
+                    const internalContainer = block.querySelector('.formatted-code-block-internal-container');
+                    if (internalContainer) {
+                        const btn = createButton(text, type);
+                        btn.style.position = 'absolute';
+                        btn.style.right = '8px';
+                        btn.style.top = '8px';
+                        btn.style.float = 'none';
+
+                        // Ensure container is relative
+                        if (getComputedStyle(internalContainer).position === 'static') {
+                            internalContainer.style.position = 'relative';
+                        }
+                        internalContainer.appendChild(btn);
+                    } else {
+                        // Ultimate fallback: Default float behavior on the block itself
+                        const btn = createButton(text, type);
+                        btn.style.float = 'right';
+                        btn.style.margin = '8px';
+                        if (block.firstChild) {
+                            block.insertBefore(btn, block.firstChild);
+                        } else {
+                            block.appendChild(btn);
+                        }
+                    }
+                }
             } else {
                 // Default Layout (Float) for ChatGPT, etc.
                 const floatDirection = 'right';
