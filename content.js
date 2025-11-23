@@ -1,6 +1,9 @@
 // content.js
 
 const BUTTON_ID_PREFIX = 'drawio-launcher-btn-';
+const HOSTNAME = window.location.hostname;
+const IS_CLAUDE = HOSTNAME.includes('claude.ai');
+const IS_CHATGPT = HOSTNAME.includes('chatgpt.com') || HOSTNAME.includes('chat.openai.com');
 
 function detectDiagramType(text, element) {
     if (!text || text.length < 10) return null;
@@ -48,8 +51,7 @@ function createButton(content, type) {
     btn.textContent = 'Open in Draw.io';
 
     // Check if we're on Claude.ai
-    const isClaudeAi = window.location.hostname.includes('claude.ai');
-    const floatDirection = isClaudeAi ? 'left' : 'right';
+    const floatDirection = IS_CLAUDE ? 'left' : 'right';
 
     btn.style.cssText = `
     float: ${floatDirection};
@@ -108,6 +110,36 @@ function isRelevantCodeBlock(codeElement) {
         classes.includes('mermaid');
 }
 
+// Prefer processing the CODE child for ChatGPT streaming blocks to avoid double inserts on PRE + CODE
+function enqueuePreOrCode(preElement) {
+    if (!preElement || processedBlocks.has(preElement)) return false;
+
+    const codeChild = preElement.querySelector('code');
+    if (IS_CHATGPT) {
+        if (codeChild && !processedBlocks.has(codeChild)) {
+            pendingBlocks.add(codeChild);
+            return true;
+        }
+        // Wait for CODE to appear to avoid injecting twice on streaming updates
+        return false;
+    }
+
+    if (codeChild && isRelevantCodeBlock(codeChild)) {
+        if (!processedBlocks.has(codeChild)) {
+            pendingBlocks.add(codeChild);
+            return true;
+        }
+        return false;
+    }
+
+    if (!codeChild || !isRelevantCodeBlock(codeChild)) {
+        pendingBlocks.add(preElement);
+        return true;
+    }
+
+    return false;
+}
+
 const processPendingBlocks = debounce(() => {
     pendingBlocks.forEach(block => {
         // If already processed successfully, skip (unless we want to support updates, but usually once is enough)
@@ -143,10 +175,9 @@ const processPendingBlocks = debounce(() => {
             processedBlocks.add(block);
 
             // Check if we're on Claude.ai or Gemini for button positioning
-            const isClaudeAi = window.location.hostname.includes('claude.ai');
             const isGemini = block.tagName === 'CODE-BLOCK';
 
-            if (isClaudeAi) {
+            if (IS_CLAUDE) {
                 // Claude specific layout: Block layout (own line) using SPAN (phrasing content) to be valid inside CODE
                 // ... (existing Claude logic) ...
                 // Top Button Container
@@ -276,21 +307,7 @@ const observer = new MutationObserver((mutations) => {
 
                     // Direct check for PRE or CODE
                     if (tagName === 'PRE') {
-                        // Early exit if already processed
-                        if (processedBlocks.has(node)) continue;
-
-                        // If PRE has a relevant CODE child, add the CODE child instead
-                        const codeChild = node.querySelector('code');
-                        if (codeChild && isRelevantCodeBlock(codeChild)) {
-                            if (!processedBlocks.has(codeChild)) {
-                                pendingBlocks.add(codeChild);
-                                shouldProcess = true;
-                            }
-                        } else {
-                            // Otherwise add PRE (fallback)
-                            pendingBlocks.add(node);
-                            shouldProcess = true;
-                        }
+                        if (enqueuePreOrCode(node)) shouldProcess = true;
                     } else if (tagName === 'CODE-BLOCK') {
                         // Support for Gemini's code-block tag
                         if (!processedBlocks.has(node)) {
@@ -301,7 +318,7 @@ const observer = new MutationObserver((mutations) => {
                         // Early exit if already processed
                         if (processedBlocks.has(node)) continue;
 
-                        if (isRelevantCodeBlock(node)) {
+                        if (IS_CHATGPT || isRelevantCodeBlock(node)) {
                             pendingBlocks.add(node);
                             shouldProcess = true;
                         }
@@ -312,7 +329,7 @@ const observer = new MutationObserver((mutations) => {
                         // Prioritize CODE elements
                         const codes = node.getElementsByTagName('code');
                         for (const code of codes) {
-                            if (!processedBlocks.has(code) && isRelevantCodeBlock(code)) {
+                            if (!processedBlocks.has(code) && (IS_CHATGPT || isRelevantCodeBlock(code))) {
                                 pendingBlocks.add(code);
                                 shouldProcess = true;
                             }
@@ -321,13 +338,7 @@ const observer = new MutationObserver((mutations) => {
                         // Check PRE elements, but skip if they contain relevant CODE (to avoid duplicates)
                         const pres = node.getElementsByTagName('pre');
                         for (const pre of pres) {
-                            if (processedBlocks.has(pre)) continue;
-
-                            const codeChild = pre.querySelector('code');
-                            if (!codeChild || !isRelevantCodeBlock(codeChild)) {
-                                pendingBlocks.add(pre);
-                                shouldProcess = true;
-                            }
+                            if (enqueuePreOrCode(pre)) shouldProcess = true;
                         }
                     }
                 } else if (node.nodeType === 3) { // Text node
@@ -336,21 +347,9 @@ const observer = new MutationObserver((mutations) => {
                     if (parent) {
                         const parentTagName = parent.tagName;
                         if (parentTagName === 'PRE') {
-                            if (processedBlocks.has(parent)) continue;
-
-                            // If PRE has CODE, ignore PRE
-                            const codeChild = parent.querySelector('code');
-                            if (codeChild && isRelevantCodeBlock(codeChild)) {
-                                if (!processedBlocks.has(codeChild)) {
-                                    pendingBlocks.add(codeChild);
-                                    shouldProcess = true;
-                                }
-                            } else {
-                                pendingBlocks.add(parent);
-                                shouldProcess = true;
-                            }
+                            if (enqueuePreOrCode(parent)) shouldProcess = true;
                         } else if (parentTagName === 'CODE') {
-                            if (!processedBlocks.has(parent) && isRelevantCodeBlock(parent)) {
+                            if (!processedBlocks.has(parent) && (IS_CHATGPT || isRelevantCodeBlock(parent))) {
                                 pendingBlocks.add(parent);
                                 shouldProcess = true;
                             }
@@ -359,20 +358,8 @@ const observer = new MutationObserver((mutations) => {
                             const grandParent = parent.parentElement;
                             if (grandParent) {
                                 if (grandParent.tagName === 'PRE') {
-                                    if (processedBlocks.has(grandParent)) continue;
-
-                                    // If PRE has CODE, ignore PRE
-                                    const codeChild = grandParent.querySelector('code');
-                                    if (codeChild && isRelevantCodeBlock(codeChild)) {
-                                        if (!processedBlocks.has(codeChild)) {
-                                            pendingBlocks.add(codeChild);
-                                            shouldProcess = true;
-                                        }
-                                    } else {
-                                        pendingBlocks.add(grandParent);
-                                        shouldProcess = true;
-                                    }
-                                } else if (grandParent.tagName === 'CODE' && !processedBlocks.has(grandParent) && isRelevantCodeBlock(grandParent)) {
+                                    if (enqueuePreOrCode(grandParent)) shouldProcess = true;
+                                } else if (grandParent.tagName === 'CODE' && !processedBlocks.has(grandParent) && (IS_CHATGPT || isRelevantCodeBlock(grandParent))) {
                                     pendingBlocks.add(grandParent);
                                     shouldProcess = true;
                                 }
@@ -390,26 +377,14 @@ const observer = new MutationObserver((mutations) => {
             if (parent) {
                 const parentTagName = parent.tagName;
                 if (parentTagName === 'PRE') {
-                    if (processedBlocks.has(parent)) continue;
-
-                    // If PRE has CODE, ignore PRE
-                    const codeChild = parent.querySelector('code');
-                    if (codeChild && isRelevantCodeBlock(codeChild)) {
-                        if (!processedBlocks.has(codeChild)) {
-                            pendingBlocks.add(codeChild);
-                            shouldProcess = true;
-                        }
-                    } else {
-                        pendingBlocks.add(parent);
-                        shouldProcess = true;
-                    }
+                    if (enqueuePreOrCode(parent)) shouldProcess = true;
                 } else if (parentTagName === 'CODE-BLOCK') {
                     if (!processedBlocks.has(parent)) {
                         pendingBlocks.add(parent);
                         shouldProcess = true;
                     }
                 } else if (parentTagName === 'CODE') {
-                    if (!processedBlocks.has(parent) && isRelevantCodeBlock(parent)) {
+                    if (!processedBlocks.has(parent) && (IS_CHATGPT || isRelevantCodeBlock(parent))) {
                         pendingBlocks.add(parent);
                         shouldProcess = true;
                     }
@@ -424,28 +399,23 @@ const observer = new MutationObserver((mutations) => {
 });
 
 // Check if we're on Claude.ai - disable characterData observation for better performance
-const isClaudeAi = window.location.hostname.includes('claude.ai');
-
 observer.observe(document.body, {
     childList: true,
     subtree: true,
-    characterData: !isClaudeAi // Disable for Claude.ai to improve code block expansion performance
+    characterData: !IS_CLAUDE // Disable for Claude.ai to improve code block expansion performance
 });
 
 // Initial pass
 // Prioritize CODE and CODE-BLOCK elements
 document.querySelectorAll('code, code-block').forEach(el => {
-    if (isRelevantCodeBlock(el)) {
+    if (IS_CHATGPT || isRelevantCodeBlock(el)) {
         pendingBlocks.add(el);
     }
 });
 
 // Check PRE elements, but skip if they contain relevant CODE (to avoid duplicates)
 document.querySelectorAll('pre').forEach(pre => {
-    const codeChild = pre.querySelector('code');
-    if (!codeChild || !isRelevantCodeBlock(codeChild)) {
-        pendingBlocks.add(pre);
-    }
+    enqueuePreOrCode(pre);
 });
 processPendingBlocks();
 
