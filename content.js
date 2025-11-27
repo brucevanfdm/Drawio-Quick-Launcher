@@ -4,6 +4,7 @@ const BUTTON_ID_PREFIX = 'drawio-launcher-btn-';
 const HOSTNAME = window.location.hostname;
 const IS_CLAUDE = HOSTNAME.includes('claude.ai');
 const IS_CHATGPT = HOSTNAME.includes('chatgpt.com') || HOSTNAME.includes('chat.openai.com');
+const IS_AISTUDIO = HOSTNAME.includes('aistudio.google.com');
 
 function detectDiagramType(text, element) {
     if (!text || text.length < 10) return null;
@@ -206,6 +207,7 @@ const processPendingBlocks = debounce(() => {
             // Safety check: Prevent duplicate buttons if they already exist in this block
             if (block.querySelector('.drawio-launcher-btn')) {
                 processedBlocks.add(block);
+                pendingBlocks.delete(block);
                 return;
             }
 
@@ -251,6 +253,32 @@ const processPendingBlocks = debounce(() => {
                 // Insert Bottom Container
                 block.appendChild(bottomContainer);
 
+            } else if (IS_AISTUDIO) {
+                // AI Studio specific layout: Insert into .mat-content in the expansion panel header
+                const expansionPanel = block.closest('mat-expansion-panel');
+                if (expansionPanel) {
+                    const header = expansionPanel.querySelector('mat-expansion-panel-header');
+                    if (header) {
+                        const matContent = header.querySelector('.mat-content');
+                        if (matContent) {
+                            // Check if button already exists in matContent to avoid duplicates
+                            if (!matContent.querySelector('.drawio-launcher-btn')) {
+                                const btn = createButton(getContent, type);
+                                // Style for AI Studio header
+                                btn.style.float = 'none';
+                                btn.style.marginLeft = '12px'; // Spacing from title
+                                btn.style.height = '24px';
+                                btn.style.lineHeight = '24px';
+                                btn.style.fontSize = '12px';
+                                btn.style.display = 'inline-block';
+                                btn.style.verticalAlign = 'middle';
+
+                                // Append to mat-content
+                                matContent.appendChild(btn);
+                            }
+                        }
+                    }
+                }
             } else if (isGemini) {
                 // Gemini specific layout: Insert into the header toolbar if possible
                 const headerButtons = block.querySelector('.code-block-decoration .buttons');
@@ -300,38 +328,76 @@ const processPendingBlocks = debounce(() => {
                     }
                 }
             } else {
-                // Default Layout (Float) for ChatGPT, etc.
-                const floatDirection = 'right';
+                // ChatGPT Layout: Insert button next to the copy button in the sticky header
+                // Note: .contain-inline-size is a CHILD of the pre element, not a parent
+                const container = block.querySelector('.contain-inline-size');
+                if (container) {
+                    // Find the button container (bg-token-bg-elevated-secondary)
+                    const buttonContainer = container.querySelector('.sticky .bg-token-bg-elevated-secondary');
+                    if (buttonContainer) {
+                        // Check if button already exists to avoid duplicates
+                        if (!buttonContainer.querySelector('.drawio-launcher-btn')) {
+                            const btn = createButton(getContent, type);
+                            // Style for ChatGPT header button
+                            btn.style.float = 'none';
+                            btn.style.margin = '0';
+                            btn.style.height = '24px';
+                            btn.style.lineHeight = '24px';
+                            btn.style.fontSize = '12px';
+                            btn.style.display = 'inline-block';
+                            btn.style.padding = '0 8px';
 
-                // Create Top Button
-                const btnTop = createButton(getContent, type);
-                btnTop.style.float = floatDirection;
-                btnTop.style.marginRight = '8px';
-                btnTop.style.marginTop = '8px';
-
-                // Create Bottom Button
-                const btnBottom = createButton(getContent, type);
-                btnBottom.style.float = floatDirection;
-                btnBottom.style.marginRight = '8px';
-                btnBottom.style.marginBottom = '8px';
-                btnBottom.style.marginTop = '8px'; // Add some space from text
-
-                // Insert Top Button
-                if (block.firstChild) {
-                    block.insertBefore(btnTop, block.firstChild);
+                            // Insert before the first button (copy button)
+                            if (buttonContainer.firstChild) {
+                                buttonContainer.insertBefore(btn, buttonContainer.firstChild);
+                            } else {
+                                buttonContainer.appendChild(btn);
+                            }
+                        }
+                    } else {
+                        // Fallback: use old float method if can't find button container
+                        const btn = createButton(getContent, type);
+                        btn.style.float = 'right';
+                        btn.style.margin = '8px';
+                        if (block.firstChild) {
+                            block.insertBefore(btn, block.firstChild);
+                        } else {
+                            block.appendChild(btn);
+                        }
+                    }
                 } else {
-                    block.appendChild(btnTop);
+                    // Ultimate fallback if no container found
+                    const btn = createButton(getContent, type);
+                    btn.style.float = 'right';
+                    btn.style.margin = '8px';
+                    if (block.firstChild) {
+                        block.insertBefore(btn, block.firstChild);
+                    } else {
+                        block.appendChild(btn);
+                    }
                 }
-
-                // Insert Bottom Button
-                block.appendChild(btnBottom);
             }
 
-            // Remove from pending once processed
+
+            // Remove from pending once processed successfully
             pendingBlocks.delete(block);
+        } else {
+            // If type detection failed (e.g., content not loaded yet),
+            // keep the block in pendingBlocks for retry on next mutation
+            // But only retry a limited number of times to avoid infinite loops
+            if (!block._retryCount) {
+                block._retryCount = 0;
+            }
+            block._retryCount++;
+
+            // After 5 retries (5 x 100ms = 500ms), give up and remove it
+            if (block._retryCount > 5) {
+                pendingBlocks.delete(block);
+            }
+            // Otherwise, keep it in pendingBlocks for next attempt
         }
     });
-    pendingBlocks.clear();
+    // Do NOT clear pendingBlocks - blocks that failed detection will be retried
 }, 100); // Wait 100ms after last change to process (faster response, still debounced)
 
 // Observer for dynamic content (SPA) and Streaming
@@ -362,7 +428,8 @@ const observer = new MutationObserver((mutations) => {
                             pendingBlocks.add(node);
                             shouldProcess = true;
                         }
-                    } else if (tagName === 'DIV' || tagName === 'MAIN' || tagName === 'SECTION' || tagName === 'ARTICLE' || tagName === 'TD') {
+                    } else if (tagName === 'DIV' || tagName === 'MAIN' || tagName === 'SECTION' || tagName === 'ARTICLE' || tagName === 'TD' ||
+                        tagName === 'MS-CODE-BLOCK' || tagName === 'MAT-EXPANSION-PANEL' || tagName === 'MS-PROMPT-CHUNK' || tagName === 'MS-TEXT-CHUNK') {
                         // Only look inside container elements to avoid expensive queries on small elements (SPAN, A, etc.)
 
                         // Use getElementsByTagName (faster than querySelectorAll)
