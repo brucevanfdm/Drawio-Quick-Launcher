@@ -134,6 +134,12 @@ function isRelevantCodeBlock(codeElement) {
 function enqueuePreOrCode(preElement) {
     if (!preElement || processedBlocks.has(preElement)) return false;
 
+    // Gemini: If the element is inside a CODE-BLOCK, skip it. 
+    // The CODE-BLOCK itself will be processed (or has been processed) to add buttons in the header.
+    if (preElement.closest('code-block')) {
+        return false;
+    }
+
     const codeChild = preElement.querySelector('code');
     if (IS_CHATGPT) {
         if (codeChild && !processedBlocks.has(codeChild)) {
@@ -165,6 +171,11 @@ const processPendingBlocks = debounce(() => {
         // If already processed successfully, skip (unless we want to support updates, but usually once is enough)
         if (processedBlocks.has(block)) return;
 
+        // Gemini: If block is inside a CODE-BLOCK but is NOT the CODE-BLOCK itself, skip it.
+        if (block.tagName !== 'CODE-BLOCK' && block.closest('code-block')) {
+            return;
+        }
+
         // Extract text and detect type
         let text, codeElement;
 
@@ -192,6 +203,12 @@ const processPendingBlocks = debounce(() => {
         const type = detectDiagramType(text, codeElement || block);
 
         if (type) {
+            // Safety check: Prevent duplicate buttons if they already exist in this block
+            if (block.querySelector('.drawio-launcher-btn')) {
+                processedBlocks.add(block);
+                return;
+            }
+
             processedBlocks.add(block);
 
             // Check if we're on Claude.ai or Gemini for button positioning
