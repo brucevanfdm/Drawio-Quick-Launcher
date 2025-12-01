@@ -5,6 +5,7 @@ const HOSTNAME = window.location.hostname;
 const IS_CLAUDE = HOSTNAME.includes('claude.ai');
 const IS_CHATGPT = HOSTNAME.includes('chatgpt.com') || HOSTNAME.includes('chat.openai.com');
 const IS_AISTUDIO = HOSTNAME.includes('aistudio.google.com');
+const IS_DEEPSEEK = HOSTNAME.includes('deepseek.com');
 
 function detectDiagramType(text, element) {
     if (!text || text.length < 10) return null;
@@ -324,6 +325,36 @@ const processPendingBlocks = debounce(() => {
                             block.insertBefore(btn, block.firstChild);
                         } else {
                             block.appendChild(btn);
+                        }
+                    }
+                }
+            } else if (IS_DEEPSEEK) {
+                // DeepSeek specific layout: Insert into the code block banner toolbar
+                const mdCodeBlock = block.closest('.md-code-block');
+                if (mdCodeBlock) {
+                    const banner = mdCodeBlock.querySelector('.md-code-block-banner');
+                    if (banner) {
+                        const buttonContainer = banner.querySelector('.d2a24f03:last-child .efa13877');
+                        if (buttonContainer) {
+                            // Check if button already exists to avoid duplicates
+                            if (!buttonContainer.querySelector('.drawio-launcher-btn')) {
+                                const btn = createButton(getContent, type);
+                                // Style for DeepSeek header button
+                                btn.style.float = 'none';
+                                btn.style.margin = '0 4px 0 0';
+                                btn.style.height = '24px';
+                                btn.style.lineHeight = '24px';
+                                btn.style.fontSize = '12px';
+                                btn.style.display = 'inline-block';
+                                btn.style.padding = '0 8px';
+
+                                // Insert before first child to be leftmost
+                                if (buttonContainer.firstChild) {
+                                    buttonContainer.insertBefore(btn, buttonContainer.firstChild);
+                                } else {
+                                    buttonContainer.appendChild(btn);
+                                }
+                            }
                         }
                     }
                 }

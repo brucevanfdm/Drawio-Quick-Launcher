@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "Draw.io Quick Launcher",
-    "version": "1.2.0",
-    "description": "将在ChatGPT、Gemini、Claude等AI生成的drawio、mermaid代码，一键导入app.diagrams.net网站并打开，方便继续编辑与下载",
+    "version": "1.3.0",
+    "description": "将在ChatGPT、Gemini、Claude等AI生成的drawio、mermaid代码,一键导入app.diagrams.net网站并打开,方便继续编辑与下载",
     "permissions": [
         "contextMenus"
     ],
@@ -20,7 +20,8 @@
                 "https://gemini.google.com/*",
                 "https://aistudio.google.com/*",
                 "https://chatgpt.com/*",
-                "https://claude.ai/*"
+                "https://claude.ai/*",
+                "https://chat.deepseek.com/*"
             ],
             "js": [
                 "content.js"
