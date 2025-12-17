@@ -1,32 +1,29 @@
 {
-    "manifest_version": 3,
-    "name": "Draw.io Quick Launcher",
-    "version": "1.4.0",
-    "description": "将在ChatGPT、Gemini、Claude、Perplexity等AI生成的drawio、mermaid代码,一键导入app.diagrams.net网站并打开,方便继续编辑与下载",
-    "permissions": [
-        "contextMenus"
-    ],
-    "icons": {
-        "16": "icon16.png",
-        "48": "icon48.png",
-        "128": "icon128.png"
-    },
-    "background": {
-        "service_worker": "background.js"
-    },
-    "content_scripts": [
-        {
-            "matches": [
-                "https://gemini.google.com/*",
-                "https://aistudio.google.com/*",
-                "https://chatgpt.com/*",
-                "https://claude.ai/*",
-                "https://chat.deepseek.com/*",
-                "https://www.perplexity.ai/*"
-            ],
-            "js": [
-                "content.js"
-            ]
-        }
-    ]
+  "manifest_version": 3,
+  "name": "Draw.io Quick Launcher",
+  "version": "1.5.0",
+  "description": "将在ChatGPT、Gemini、Claude、Perplexity等AI生成的drawio、mermaid代码,一键导入app.diagrams.net网站并打开,方便继续编辑与下载",
+  "permissions": ["contextMenus"],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://gemini.google.com/*",
+        "https://aistudio.google.com/*",
+        "https://chatgpt.com/*",
+        "https://claude.ai/*",
+        "https://chat.deepseek.com/*",
+        "https://www.perplexity.ai/*",
+        "https://aistudio.xiaomimimo.com/*"
+      ],
+      "js": ["content.js"]
+    }
+  ]
 }

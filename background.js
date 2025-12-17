@@ -12,7 +12,8 @@ chrome.runtime.onInstalled.addListener(() => {
             "https://chatgpt.com/*",
             "https://claude.ai/*",
             "https://chat.deepseek.com/*",
-            "https://www.perplexity.ai/*"
+            "https://www.perplexity.ai/*",
+            "https://aistudio.xiaomimimo.com/*"
         ]
     });
 });
