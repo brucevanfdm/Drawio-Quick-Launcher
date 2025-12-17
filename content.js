@@ -31,6 +31,7 @@ const IS_CHATGPT = HOSTNAME.includes('chatgpt.com') || HOSTNAME.includes('chat.o
 const IS_AISTUDIO = HOSTNAME.includes('aistudio.google.com');
 const IS_DEEPSEEK = HOSTNAME.includes('deepseek.com');
 const IS_PERPLEXITY = HOSTNAME.includes('perplexity.ai');
+const IS_XIAOMIMIMO = HOSTNAME.includes('xiaomimimo.com');
 
 function detectDiagramType(text, element) {
     if (!text || text.length < 10) return null;
@@ -466,6 +467,42 @@ const processPendingBlocks = debounce(() => {
                                 codeWrapper.style.position = 'relative';
                             }
                             codeWrapper.appendChild(btn);
+                        }
+                    }
+                }
+            } else if (IS_XIAOMIMIMO) {
+                // xiaomimimo.com specific layout: Insert into the header button container
+                const preElement = block.tagName === 'CODE' ? block.closest('pre') : block;
+                
+                if (preElement) {
+                    const header = preElement.closest('div')?.querySelector('header.flex.items-center');
+                    
+                    if (header) {
+                        const buttonContainer = header.querySelector('div.flex.items-center.gap-2:last-child');
+                        
+                        if (buttonContainer && !buttonContainer.querySelector('.drawio-launcher-btn')) {
+                            const btn = createButton(getContent, type);
+                            // Style for xiaomimimo header button
+                            btn.style.float = 'none';
+                            btn.style.margin = '0';
+                            btn.style.marginRight = '8px';
+                            btn.style.height = '28px';
+                            btn.style.lineHeight = '28px';
+                            btn.style.fontSize = '12px';
+                            btn.style.display = 'inline-block';
+                            btn.style.padding = '0 12px';
+                            btn.style.borderRadius = '6px';
+                            btn.style.position = 'relative';
+                            btn.style.outline = 'none';
+                            btn.style.border = '1px solid transparent';
+                            btn.style.whiteSpace = 'nowrap';
+                            
+                            // Insert before the first child (before the copy button)
+                            if (buttonContainer.firstChild) {
+                                buttonContainer.insertBefore(btn, buttonContainer.firstChild);
+                            } else {
+                                buttonContainer.appendChild(btn);
+                            }
                         }
                     }
                 }
